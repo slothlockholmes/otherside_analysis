@@ -1,0 +1,16 @@
+[package]
+name = "otherside_analysis"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ethers = { git = "https://github.com/gakonst/ethers-rs", features = ["ws", "rustls"] }
+tokio = { version = "1.18.0", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+eyre = "0.3"
+dotenv = "0.15.0"
+dotenv_codegen = "0.15.0"
+rusqlite = "0.27.0"

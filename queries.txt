@@ -1,0 +1,215 @@
+--select
+--	block_number,
+--	count(block_number) as num_tx,
+--	sum(gas_price * 1.0 * gas) / 1000000000000000000 as total_gas_fees,
+--	avg(gas_price * 1.0 * gas) / 1000000000000000000 as avg_gas_fee
+--from tx
+--GROUP by block_number
+--ORDER by avg_gas_fee asc
+
+
+select
+	tx.block_number as block_number,
+	tx.transaction_index as tx_idx,
+	tx.hash as txn_hash,
+	receipt.status as status,
+	tx.sender as "from",
+	tx.recipient as "to",
+	tx.value as "value",
+	tx.gas_price as gas_price,
+	receipt.gas_used as gas_used,
+	(tx.gas_price * 1.0 * receipt.gas_used) / 1000000000000000000 as gas_fees,
+	tx.input as "input"
+from tx inner join receipt on tx.hash = receipt.transaction_hash
+where tx.input like '%0x3fa8e1b5%'
+
+select
+	tx.sender,
+	count(tx.sender) as count
+from tx inner join receipt on tx.hash = receipt.transaction_hash
+where tx.input like '%0x3fa8e1b5%'
+group by tx.sender order by count desc
+
+-- count from, group by sender
+select
+	sender AS address,
+	count(sender) * -1 AS count_from 
+FROM
+	transfer_from_logs
+GROUP BY
+	sender
+
+-- count to, group by recipient
+select
+	recipient AS address,
+	count(recipient) AS count_to 
+FROM
+	transfer_from_logs
+GROUP BY
+	recipient
+
+-- get count from, count to for all addresses
+SELECT
+	f.address,
+	f.count_from,
+	t.address,
+	t.count_to
+From (
+	select
+		sender AS address,
+		count(sender) * -1 AS count_from 
+	FROM
+		transfer_from_logs
+	GROUP BY
+		sender
+) f
+LEFT JOIN (
+	select
+		recipient AS address,
+		count(recipient) AS count_to 
+	FROM
+		transfer_from_logs
+	GROUP BY
+		recipient
+) t USING(address)
+UNION ALL
+SELECT
+	f.address,
+	f.count_from,
+	t.address,
+	t.count_to
+From (
+	select
+		recipient AS address,
+		count(recipient) AS count_to 
+	FROM
+		transfer_from_logs
+	GROUP BY
+		recipient
+) t
+LEFT JOIN (
+	select
+		sender AS address,
+		count(sender) * -1 AS count_from 
+	FROM
+		transfer_from_logs
+	GROUP BY
+		sender
+) f USING(address)
+where f.address IS NULL
+	
+-- To get total culmulative transfers 
+SELECT
+	a.address,
+	a.count_from + a.count_to as balance
+FROM (
+	(SELECT
+		f.address,
+		f.count_from,
+		t.address,
+		t.count_to
+	From (
+		select
+			sender AS address,
+			count(sender) * -1 AS count_from 
+		FROM
+			transfer_from_logs
+		GROUP BY
+			sender
+	) f
+	LEFT JOIN (
+		select
+			recipient AS address,
+			count(recipient) AS count_to 
+		FROM
+			transfer_from_logs
+		GROUP BY
+			recipient
+	) t USING(address)
+	UNION ALL
+	SELECT
+		f.address,
+		f.count_from,
+		t.address,
+		t.count_to
+	From (
+		select
+			recipient AS address,
+			count(recipient) AS count_to 
+		FROM
+			transfer_from_logs
+		GROUP BY
+			recipient
+	) t
+	LEFT JOIN (
+		select
+			sender AS address,
+			count(sender) * -1 AS count_from 
+		FROM
+			transfer_from_logs
+		GROUP BY
+			sender
+	) f USING(address)
+	where f.address IS NULL)
+) as a
+where balance > 0
+order by balance desc
+
+
+-- test
+SELECT
+	f.address,
+	f.count_to,
+	t.address,
+	t.count_from
+From (
+	select
+		orders_matched_logs.buyer AS address,
+		count(orders_matched_logs.buyer) as count_to
+	FROM
+		orders_matched_logs
+	INNER JOIN
+		transfer_from_logs on orders_matched_logs.transaction_hash = transfer_from_logs.transaction_hash
+	GROUP BY
+		orders_matched_logs.buyer
+) f
+LEFT JOIN (
+	select
+		orders_matched_logs.seller AS address,
+		count(orders_matched_logs.seller) * -1 as count_from
+	FROM
+		orders_matched_logs
+	INNER JOIN
+		transfer_from_logs on orders_matched_logs.transaction_hash = transfer_from_logs.transaction_hash
+	GROUP BY
+		orders_matched_logs.seller
+) t USING(address)
+UNION ALL
+SELECT
+	f.address,
+	f.count_to,
+	t.address,
+	t.count_from
+From (
+	select
+		orders_matched_logs.seller AS address,
+		count(orders_matched_logs.seller) * -1 as count_from
+	FROM
+		orders_matched_logs
+	INNER JOIN
+		transfer_from_logs on orders_matched_logs.transaction_hash = transfer_from_logs.transaction_hash
+	GROUP BY
+		orders_matched_logs.seller
+) t
+LEFT JOIN (
+	select
+		orders_matched_logs.buyer AS address,
+		count(orders_matched_logs.buyer) as count_to
+	FROM
+		orders_matched_logs
+	INNER JOIN
+		transfer_from_logs on orders_matched_logs.transaction_hash = transfer_from_logs.transaction_hash
+	GROUP BY
+		orders_matched_logs.buyer
+) f USING(address)
+where f.address IS NULL
